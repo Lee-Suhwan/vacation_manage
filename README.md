@@ -56,12 +56,4 @@ Python이 설치된 환경에서 소스 코드를 직접 실행합니다.
    git clone [https://github.com/Lee-Suhwan/vacation_manage.git]
    cd vacation_manage
 
-📂 폴더 구조
-vacation_manage/
-├── vacation.py        # 메인 프로그램 소스 코드
-├── create_icon.py     # 실행 아이콘(.ico) 생성 스크립트
-├── build_guide.md     # exe 빌드 가이드 문서
-├── calendar.ico       # 생성된 아이콘 파일
-└── 삭제금지_data/      # [중요] 데이터 저장소 (자동 생성됨)
-    ├── db.json        # 휴가 일정 데이터
-    └── history.json   # 변경 이력 로그
+
