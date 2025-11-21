@@ -255,13 +255,19 @@ class VacationApp:
         self.root = root
         self.root.title("휴가관리")
         
-        # Center the window
+        # [수정됨] Center the window Visually
+        # 작업표시줄 등을 고려하여 수학적 중앙보다 약간 위로 배치
         w, h = 1280, 960
         ws = self.root.winfo_screenwidth()
         hs = self.root.winfo_screenheight()
-        x = (ws/2) - (w/2)
-        y = (hs/2) - (h/2)
-        self.root.geometry('%dx%d+%d+%d' % (w, h, x, y))
+        
+        x = int((ws - w) / 2)
+        # 높이는 정중앙에서 50픽셀 정도 위로 올려야 시각적으로 안정적임
+        y = int((hs - h) / 2) - 50 
+        
+        if y < 0: y = 0 # 화면 위로 넘어가지 않도록 보정
+        
+        self.root.geometry(f'{w}x{h}+{x}+{y}')
         
         self.root.configure(bg=COLOR_BG)
         
@@ -470,6 +476,10 @@ class VacationApp:
         self.date_picker.configure(bg=COLOR_SURFACE)
         self.apply_icon(self.date_picker)
         
+        # [추가] 메인 창과 연결 및 모달(Modal) 설정 - 팝업이 떠있는 동안 메인창 조작 불가
+        self.date_picker.transient(self.root)
+        self.date_picker.grab_set()
+        
         # Position relative to the label
         try:
             x = self.lbl_month.winfo_rootx()
@@ -550,8 +560,19 @@ class VacationApp:
         self.vacation_popup = tk.Toplevel(self.root)
         dialog = self.vacation_popup
         dialog.title("일정 등록")
-        dialog.geometry("380x300")
+        
+        # [유지] 마우스 커서 위치에 팝업 생성
+        w, h = 380, 300
+        mouse_x = self.root.winfo_pointerx()
+        mouse_y = self.root.winfo_pointery()
+        dialog.geometry(f"{w}x{h}+{mouse_x}+{mouse_y}")
+        
         dialog.configure(bg=COLOR_SURFACE)
+        
+        # [유지] 메인 창과 연결 및 모달(Modal) 설정 - 메인창 뒤로 안 내려감
+        dialog.transient(self.root)
+        dialog.grab_set()
+        
         self.apply_icon(dialog)
         
         tk.Label(dialog, text=f"DATE: {date_str}", font=FONT_HEADER, bg=COLOR_SURFACE, fg=COLOR_TEXT_MAIN).pack(pady=20)
@@ -619,6 +640,10 @@ class VacationApp:
         dialog.geometry("800x600")
         dialog.configure(bg=COLOR_SURFACE)
         self.apply_icon(dialog)
+        
+        # [유지] 메인 창과 연결 및 모달(Modal) 설정
+        dialog.transient(self.root)
+        dialog.grab_set()
         
         columns = ("time", "actor", "action", "date", "target")
         headers = ("시간", "장치명", "동작", "날짜", "대상")
