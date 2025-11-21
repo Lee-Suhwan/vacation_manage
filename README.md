@@ -1,59 +1,58 @@
 # 🗓️ Team Vacation Manager (Desktop App)
 
-![Python](https://img.shields.io/badge/python-3.x-blue) ![GUI](https://img.shields.io/badge/GUI-Tkinter-green) ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
+![Python](https://img.shields.io/badge/python-3.x-blue) ![GUI](https://img.shields.io/badge/GUI-Tkinter-green) ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey) ![License](https://img.shields.io/badge/license-MIT-green)
 
 > **"서버 구축 없이, 엑셀보다 편하게."**
 > 팀원들의 휴가 일정을 관리하는 윈도우 데스크톱 애플리케이션입니다.
 
-## 📖 프로젝트 소개
-이 프로그램은 별도의 웹 서버나 DB 구축 없이, 실행 파일 하나로 팀 내 휴가 일정을 관리할 수 있도록 개발되었습니다.
-**Python Tkinter**를 사용하여 직관적인 GUI를 제공하며, 모든 데이터는 로컬 JSON 파일로 안전하게 저장됩니다.
+## 📖 프로젝트 소개 (About)
+이 프로그램은 복잡한 그룹웨어나 별도의 서버 구축 없이, **실행 파일(.exe) 하나로 소규모 팀의 휴가 일정을 효율적으로 관리**하기 위해 개발되었습니다.
+**Python Tkinter**를 사용하여 직관적인 GUI를 제공하며, 모든 데이터는 로컬 JSON 파일로 저장되어 인터넷 연결이 없는 환경에서도 독립적으로 동작합니다.
 
 ### 🎯 개발 목적
-- **편의성:** 복잡한 그룹웨어 접속 없이 바탕화면에서 즉시 일정 확인
-- **독립성:** 인터넷이 단절된 폐쇄망 환경이나 소규모 팀에서도 즉시 사용 가능
-- **효율성:** `vacation.py` 하나로 동작하며, 필요시 `.exe`로 배포 가능
+- **접근성:** 바탕화면에서 더블 클릭만으로 즉시 일정 확인 및 등록
+- **독립성:** 폐쇄망(Private Network) 등 외부 인터넷 접속이 제한된 환경에서도 사용 가능
+- **효율성:** 별도의 DB 설치 과정 없이 파일 시스템 기반으로 가볍게 구동
 
 ---
 
-## ✨ 주요 기능 (Features)
+## ✨ 주요 기능 (Key Features)
 
-### 1. 📅 캘린더 뷰 (Calendar View)
-- 월별 달력 형태로 팀원들의 휴가 현황을 한눈에 파악
-- 토요일/일요일 및 **대한민국 공휴일(대체공휴일 포함) 자동 표시**
-- 이전 달/다음 달 이동 및 '오늘(Today)' 버튼으로 빠른 탐색
+### 1. 📅 스마트 캘린더 (Calendar View)
+- **직관적인 UI:** 월별 달력 형태로 팀원들의 휴가 현황을 한눈에 파악
+- **공휴일 자동 반영:** 토/일요일은 물론, **대한민국 공휴일(대체공휴일 포함) 및 음력 명절**을 자동으로 계산하여 빨간색으로 표시
+- **네비게이션:** 이전 달/다음 달 이동 및 '오늘(Today)' 버튼 제공
 
-### 2. 📝 휴가 등록 및 관리
-- 날짜를 클릭하여 간편하게 휴가 등록
-- **휴가 종류 지원:** 연차, 오전/오후 반차, 대체휴무, 직접 입력
-- 등록된 일정 클릭 시 삭제 가능 (확인 팝업 제공)
-- 사용자 이름에 따라 자동으로 고유한 파스텔톤 색상(Color Hash) 부여
+### 2. 📝 휴가 관리 (Vacation Management)
+- **간편 등록:** 날짜를 클릭하여 이름과 휴가 종류 선택만으로 등록 완료
+- **다양한 휴가 타입:** 연차, 오전/오후 반차, 대체휴무, 직접 입력 지원
+- **시각적 구분:** 사용자 이름에 따라 자동으로 고유한 파스텔톤 색상(Color Hash)이 부여되어 식별 용이
+- **삭제 기능:** 등록된 일정을 클릭하여 간편하게 삭제 (삭제 확인 팝업 제공)
 
-### 3. 💾 데이터 관리 및 로그
-- **자동 저장:** 모든 일정은 `삭제금지_data/db.json`에 즉시 저장
-- **히스토리 기록:** 누가, 언제, 어떤 일정을 등록/삭제했는지 `history.json`에 기록 (감사 로그 기능)
-- **데이터 보호:** 프로그램 종료 후 다시 실행해도 데이터 유지
+### 3. 💾 데이터 로깅 (Data & Logging)
+- **자동 저장:** 모든 일정은 실행 파일 위치의 `삭제금지_data/db.json`에 실시간 저장
+- **감사 로그(Audit Log):** `history.json` 파일을 통해 누가(PC명), 언제, 무엇을 변경했는지 기록 추적
+- **데이터 보존:** 프로그램 종료 후 재실행 시에도 이전 데이터 완벽 복구
 
 ---
 
 ## 🛠 기술 스택 (Tech Stack)
 
-- **Language:** Python 3
-- **GUI Framework:** Tkinter (Python 표준 라이브러리)
-- **Data Storage:** JSON (Local File System)
-- **Build Tool:** PyInstaller (exe 실행 파일 변환)
-- **Graphics:** Pillow (아이콘 생성용)
+| 분류 | 기술 | 설명 |
+| :--- | :--- | :--- |
+| **Language** | Python 3.x | 핵심 로직 구현 |
+| **GUI** | Tkinter | Python 표준 GUI 라이브러리 사용 |
+| **Data** | JSON | 경량 데이터 저장소 (NoSQL 방식) |
+| **Build** | PyInstaller | 단일 실행 파일(.exe) 패키징 |
+| **Icon** | Pillow (PIL) | 실행 아이콘 동적 생성 |
 
 ---
 
-## 🚀 설치 및 실행 방법 (How to Run)
+## 🚀 설치 및 실행 가이드 (Getting Started)
 
-### 방법 1. Python으로 실행하기 (개발자용)
-Python이 설치된 환경에서 소스 코드를 직접 실행합니다.
+### 방법 1. Python 소스 코드로 실행 (개발자용)
 
-1. **저장소 클론**
+1. **저장소 클론 (Clone)**
    ```bash
-   git clone [https://github.com/Lee-Suhwan/vacation_manage.git]
+   git clone [https://github.com/Lee-Suhwan/vacation_manage.git](https://github.com/Lee-Suhwan/vacation_manage.git)
    cd vacation_manage
-
-
