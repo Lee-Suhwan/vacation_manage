@@ -56,3 +56,61 @@
    ```bash
    git clone [https://github.com/Lee-Suhwan/vacation_manage.git](https://github.com/Lee-Suhwan/vacation_manage.git)
    cd vacation_manage
+패키지 설치 (Install Dependencies)
+
+Bash
+
+pip install -r requirements.txt
+# requirements.txt가 없다면 아래 명령어로 Pillow 설치
+pip install Pillow
+아이콘 생성 (필수) 프로그램 아이콘을 생성하는 스크립트를 먼저 실행해야 합니다.
+
+Bash
+
+python create_icon.py
+프로그램 실행
+
+Bash
+
+python vacation.py
+방법 2. 실행 파일(.exe) 빌드 (배포용)
+팀원들에게 배포하기 위해 단일 실행 파일(exe)을 만드려면 아래 명령어를 사용하세요.
+
+Bash
+
+# 1. PyInstaller 설치
+pip install pyinstaller
+
+# 2. 빌드 명령어 실행 (콘솔창 숨김, 아이콘 포함)
+python -m PyInstaller --noconsole --onefile --clean --name="VacationManager" --icon="calendar.ico" --add-data="calendar.ico;." vacation.py
+빌드가 완료되면 dist/ 폴더 안에 생성된 VacationManager.exe 파일을 팀원들에게 공유하면 됩니다.
+
+📂 폴더 구조 (Directory Structure)
+Plaintext
+
+vacation_manage/
+├── vacation.py        # [Main] 메인 프로그램 소스 코드
+├── create_icon.py     # [Script] 아이콘(.ico) 생성 스크립트
+├── build_guide.md     # [Docs] 빌드 가이드 문서
+├── calendar.ico       # [Resource] 생성된 아이콘 파일
+└── 삭제금지_data/      # [Data] 데이터 저장소 (자동 생성)
+    ├── db.json        # 휴가 일정 데이터
+    └── history.json   # 변경 이력 및 감사 로그
+⚠️ 사용 시 주의사항
+데이터 폴더 보존: 프로그램 실행 시 생성되는 삭제금지_data 폴더를 절대 삭제하지 마세요. 해당 폴더를 삭제하면 등록된 모든 휴가 정보와 기록이 사라집니다.
+
+공유 사용 시: 여러 사람이 데이터를 공유해야 한다면, 삭제금지_data 폴더가 있는 경로를 **공유 폴더(NAS, 파일 서버)**로 설정하고 해당 위치에서 실행 파일을 실행하세요. (현재 버전은 로컬 파일 시스템 기반입니다.)
+
+📝 라이선스 (License)
+This project is licensed under the MIT License.
+
+
+---
+
+### 💡 이수환 님을 위한 체크리스트 (Next Step)
+
+README 파일을 올리신 후, **보안**을 위해 `.gitignore` 파일도 꼭 생성해서 올리시는 것을 추천합니다.
+(실제 휴가 데이터인 `삭제금지_data/` 폴더가 실수로 깃허브에 올라가면 개인정보가 유출될 수 있습니다.)
+
+**Would you like me to...**
+혹시 `.gitignore` 파일의 내용도 복사해서 바로 쓰실 수 있게 준비해 드릴까요?
