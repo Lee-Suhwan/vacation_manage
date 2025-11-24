@@ -51,7 +51,7 @@ python create_icon.py
 (콘솔 창 숨김, 아이콘 포함, 라이브러리 최적화 옵션이 이미 포함되어 있습니다.)
 
 ```bash
-python -m PyInstaller --noconsole --onefile --clean --name="VacationManager" --icon="calendar.ico" --add-data="calendar.ico;." --exclude-module=pydoc --exclude-module=doctest --exclude-module=unittest --exclude-module=pdb --exclude-module=distutils --exclude-module=setuptools --exclude-module=asyncore --exclude-module=email --exclude-module=html --exclude-module=http --exclude-module=xml vacation.py
+python -m PyInstaller --noconsole --onefile --clean --name="VacationManager" --icon="calendar.ico" --add-data="calendar.ico;." --collect-all "holidays" --exclude-module=pydoc --exclude-module=doctest --exclude-module=unittest --exclude-module=pdb --exclude-module=distutils --exclude-module=setuptools --exclude-module=asyncore --exclude-module=email --exclude-module=html --exclude-module=http --exclude-module=xml vacation.py
 ```
 
 빌드가 성공적으로 완료되면 **`dist/VacationManager.exe`** 파일이 생성됩니다.
