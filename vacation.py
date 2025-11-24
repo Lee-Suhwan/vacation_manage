@@ -10,6 +10,7 @@ import time
 import hashlib
 import platform
 import re
+import colorsys
 
 # ---------------------------------------------------------
 # Configuration & Constants
@@ -36,15 +37,39 @@ COLOR_TODAY_TEXT = "#D97706" # Amber 600
 # Fonts
 FONT_TITLE = ("Malgun Gothic", 24, "bold")
 FONT_HEADER = ("Malgun Gothic", 11, "bold")
-FONT_DATE = ("Malgun Gothic", 10, "bold")
-FONT_CONTENT = ("Malgun Gothic", 9)
-FONT_BTN = ("Malgun Gothic", 10, "bold")
+FONT_DATE = ("Malgun Gothic", 11, "bold")
+FONT_CONTENT = ("Malgun Gothic", 10)
+FONT_BTN = ("Malgun Gothic", 11, "bold")
 
 # Refined Pastel Palette for Users
 USER_COLORS = [
-    "#D1FAE5", "#DBEAFE", "#FCE7F3", "#FEF3C7", "#E0E7FF", 
-    "#FEE2E2", "#DCFCE7", "#FAE8FF", "#FFEDD5", "#F3F4F6",
-    "#CCFBF1", "#E0F2FE", "#F3E8FF", "#FFE4E6", "#FEF9C3"
+    # Red / Pink / Rose
+    "#FFEBEE", "#FFCDD2", "#EF9A9A", "#FCE4EC", "#F8BBD0", 
+    "#F48FB1", "#F3E5F5", "#E1BEE7", "#CE93D8", "#FFF0F5",
+    
+    # Purple / Deep Purple / Indigo
+    "#EDE7F6", "#D1C4E9", "#B39DDB", "#E8EAF6", "#C5CAE9", 
+    "#9FA8DA", "#E0E7FF", "#C7D2FE", "#A5B4FC", "#F3E8FF",
+    
+    # Blue / Light Blue / Cyan
+    "#E3F2FD", "#BBDEFB", "#90CAF9", "#E1F5FE", "#B3E5FC", 
+    "#81D4FA", "#E0F7FA", "#B2EBF2", "#80DEEA", "#DBEAFE",
+    
+    # Teal / Green / Light Green
+    "#E0F2F1", "#B2DFDB", "#80CBC4", "#E8F5E9", "#C8E6C9", 
+    "#A5D6A7", "#F1F8E9", "#DCEDC8", "#C5E1A5", "#D1FAE5",
+    
+    # Lime / Yellow / Amber
+    "#F9FBE7", "#F0F4C3", "#E6EE9C", "#FFFDE7", "#FFF9C4", 
+    "#FFF59D", "#FFF8E1", "#FFECB3", "#FFE082", "#FEF3C7",
+    
+    # Orange / Deep Orange / Brown
+    "#FFF3E0", "#FFE0B2", "#FFCC80", "#FBE9E7", "#FFCCBC", 
+    "#FFAB91", "#EFEBE9", "#D7CCC8", "#BCAAA4", "#FFEDD5",
+    
+    # Blue Grey / Cool Grey
+    "#ECEFF1", "#CFD8DC", "#B0BEC5", "#F8F9FA", "#E9ECEF",
+    "#DEE2E6", "#F3F4F6", "#E5E7EB", "#D1D5DB", "#F5F5F5"
 ]
 
 # Set Calendar to start on Sunday
@@ -273,6 +298,10 @@ class VacationApp:
         
         self.apply_icon(self.root)
         
+        # [NEW] Key Bindings for Month Navigation
+        self.root.bind("<Left>", self.prev_month)
+        self.root.bind("<Right>", self.next_month)
+        
         # Set style for Treeview
         style = ttk.Style()
         style.theme_use("clam")
@@ -288,6 +317,7 @@ class VacationApp:
         self.vacations = {}
         self.date_picker = None
         self.vacation_popup = None
+        self.cells = [] # Cells initialization
         
         self.setup_ui()
         self.refresh_data()
@@ -351,7 +381,6 @@ class VacationApp:
         
         # Grid Configuration
         for i in range(7): self.calendar_frame.columnconfigure(i, weight=1, uniform="day")
-        for i in range(7): self.calendar_frame.rowconfigure(i, weight=1) 
             
         # Headers
         days = ["일", "월", "화", "수", "목", "금", "토"]
@@ -364,16 +393,8 @@ class VacationApp:
                            fg=fg, bg=COLOR_SURFACE, pady=12)
             lbl.grid(row=0, column=i, sticky="nsew", padx=0, pady=0, ipady=0)
 
-        # Cells
+        # self.cells는 setup_ui에서 리스트만 초기화하고, 실제 위젯 생성은 render_calendar에서 수행
         self.cells = []
-        for r in range(6):
-            row_cells = []
-            for c in range(7):
-                container = tk.Frame(self.calendar_frame, bg=COLOR_SURFACE, bd=0)
-                container.grid(row=r+1, column=c, sticky="nsew", padx=1, pady=1)
-                container.bind("<Button-1>", lambda e, r=r, c=c: self.on_bg_click(r, c))
-                row_cells.append({"frame": container, "date_obj": None})
-            self.cells.append(row_cells)
 
     def refresh_data(self):
         self.vacations = self.data_manager.load_data()
@@ -388,26 +409,44 @@ class VacationApp:
         year = self.current_date.year
         month = self.current_date.month
         self.lbl_month.config(text=f"{year}. {month:02d}")
-        cal = calendar.monthcalendar(year, month)
         
-        # Reset
-        for r in range(6):
-            for c in range(7):
-                cell = self.cells[r][c]
-                cell["frame"].config(bg=COLOR_SURFACE)
-                cell["date_obj"] = None
-                for widget in cell["frame"].winfo_children():
-                    widget.destroy()
+        # 1. 달력 데이터 및 주(week) 수 계산
+        cal = calendar.monthcalendar(year, month)
+        num_weeks = len(cal)  # 4, 5, or 6
+        
+        # 2. 기존 셀(위젯) 모두 제거 (초기화)
+        for row_cells in self.cells:
+            for cell in row_cells:
+                cell["frame"].destroy()
+        self.cells = [] # 리스트 비우기
 
-        # Fill
+        # 3. 행(Row) 가중치 재설정 (동적 높이 조절 핵심)
+        # 1~6행을 순회하며 이번달 주 수(num_weeks)만큼은 weight=1, 나머지는 0
+        for i in range(1, 7):
+            if i <= num_weeks:
+                self.calendar_frame.rowconfigure(i, weight=1)
+            else:
+                self.calendar_frame.rowconfigure(i, weight=0)
+
+        # 4. 새로운 셀 생성 및 채우기
         for r, week in enumerate(cal):
+            row_cells_list = []
             for c, day in enumerate(week):
+                # 프레임 생성 (row는 헤더가 0이므로 r+1)
+                container = tk.Frame(self.calendar_frame, bg=COLOR_SURFACE, bd=0)
+                container.grid(row=r+1, column=c, sticky="nsew", padx=1, pady=1)
+                
+                # 배경 클릭 이벤트 (lambda에서 변수 캡처 주의)
+                container.bind("<Button-1>", lambda e, rr=r, cc=c: self.on_bg_click(rr, cc))
+                
+                cell_data = {"frame": container, "date_obj": None}
+                row_cells_list.append(cell_data)
+
                 if day == 0: continue
                 
-                cell = self.cells[r][c]
                 date_obj = datetime.date(year, month, day)
                 date_str = date_obj.strftime("%Y-%m-%d")
-                cell["date_obj"] = date_obj
+                cell_data["date_obj"] = date_obj
                 
                 fg = COLOR_TEXT_MAIN
                 if c == 0: fg = COLOR_SUN
@@ -417,16 +456,16 @@ class VacationApp:
                 if holiday_name: fg = COLOR_DANGER
                 
                 # Date Label
-                lbl_date = tk.Label(cell["frame"], text=str(day), font=FONT_DATE, fg=fg, bg=COLOR_SURFACE, anchor="nw")
+                lbl_date = tk.Label(container, text=str(day), font=FONT_DATE, fg=fg, bg=COLOR_SURFACE, anchor="nw")
                 lbl_date.pack(anchor="nw", padx=8, pady=8)
-                lbl_date.bind("<Button-1>", lambda e, r=r, c=c: self.on_bg_click(r, c))
+                lbl_date.bind("<Button-1>", lambda e, rr=r, cc=c: self.on_bg_click(rr, cc))
                 
                 # Holiday Label
                 if holiday_name:
-                    lbl = tk.Label(cell["frame"], text=f" {holiday_name}", font=("Malgun Gothic", 8, "bold"), 
+                    lbl = tk.Label(container, text=f" {holiday_name}", font=("Malgun Gothic", 9, "bold"), 
                                    fg=COLOR_DANGER, bg=COLOR_SURFACE, anchor="w", wraplength=120, justify="left")
                     lbl.pack(fill=tk.X, padx=6, pady=(0, 2))
-                    lbl.bind("<Button-1>", lambda e, r=r, c=c: self.on_bg_click(r, c))
+                    lbl.bind("<Button-1>", lambda e, rr=r, cc=c: self.on_bg_click(rr, cc))
 
                 # Vacations
                 vacation_list = self.vacations.get(date_str, [])
@@ -434,8 +473,7 @@ class VacationApp:
                     text = f" {v['name']} ({v['type']})"
                     bg_color = get_color_for_name(v['name'])
                     
-                    # Styled Vacation Item
-                    item_frame = tk.Frame(cell["frame"], bg=bg_color, padx=5, pady=2)
+                    item_frame = tk.Frame(container, bg=bg_color, padx=5, pady=2)
                     item_frame.pack(fill=tk.X, padx=4, pady=1)
                     
                     lbl = tk.Label(item_frame, text=text, font=FONT_CONTENT, 
@@ -443,17 +481,18 @@ class VacationApp:
                                    wraplength=110, justify="left")
                     lbl.pack(fill=tk.X)
                     
-                    # Bind click to both frame and label
                     item_frame.bind("<Button-1>", lambda e, d=date_str, item=v: self.on_item_click(d, item))
                     lbl.bind("<Button-1>", lambda e, d=date_str, item=v: self.on_item_click(d, item))
+            
+            self.cells.append(row_cells_list)
 
-    def prev_month(self):
+    def prev_month(self, event=None):
         first = self.current_date.replace(day=1)
         prev = first - datetime.timedelta(days=1)
         self.current_date = prev.replace(day=1)
         self.refresh_data()
 
-    def next_month(self):
+    def next_month(self, event=None):
         days_in_month = calendar.monthrange(self.current_date.year, self.current_date.month)[1]
         next_month = self.current_date.replace(day=days_in_month) + datetime.timedelta(days=1)
         self.current_date = next_month
@@ -471,6 +510,7 @@ class VacationApp:
             return
 
         self.date_picker = tk.Toplevel(self.root)
+        self.date_picker.bind('<Escape>', lambda e: self.date_picker.destroy())
         self.date_picker.title("날짜 이동")
         self.date_picker.geometry("320x340")
         self.date_picker.configure(bg=COLOR_SURFACE)
@@ -479,6 +519,7 @@ class VacationApp:
         # [추가] 메인 창과 연결 및 모달(Modal) 설정 - 팝업이 떠있는 동안 메인창 조작 불가
         self.date_picker.transient(self.root)
         self.date_picker.grab_set()
+        self.date_picker.focus_set()
         
         # Position relative to the label
         try:
@@ -528,6 +569,10 @@ class VacationApp:
         for i in range(3): month_frame.rowconfigure(i, weight=1)
 
     def on_bg_click(self, r, c):
+        # 인덱스 범위 체크 (동적 할당으로 인해 범위가 달라질 수 있음)
+        if r >= len(self.cells) or c >= len(self.cells[r]):
+            return
+            
         cell = self.cells[r][c]
         if not cell["date_obj"]: return
         
@@ -559,6 +604,7 @@ class VacationApp:
             
         self.vacation_popup = tk.Toplevel(self.root)
         dialog = self.vacation_popup
+        dialog.bind('<Escape>', lambda e: dialog.destroy())
         dialog.title("일정 등록")
         
         # [유지] 마우스 커서 위치에 팝업 생성
@@ -588,10 +634,10 @@ class VacationApp:
         
         tk.Label(frame_input, text="종류", font=FONT_CONTENT, bg=COLOR_SURFACE, fg=COLOR_TEXT_MUTED).grid(row=1, column=0, padx=10, pady=10, sticky="e")
         
-        type_var = tk.StringVar(value="연차")
+        type_var = tk.StringVar(value="개인연차")
         # Readonly Combobox
         combo_type = ttk.Combobox(frame_input, textvariable=type_var, 
-                                  values=["연차", "오후_반차", "오전_반차", "대체휴무", "직접입력"], 
+                                  values=["개인연차", "오후반차", "오전반차", "대체휴무", "직접입력"], 
                                   width=18, font=FONT_CONTENT, state="readonly")
         combo_type.grid(row=1, column=1, padx=10, pady=10)
         
@@ -636,6 +682,7 @@ class VacationApp:
 
     def show_history_popup(self):
         dialog = tk.Toplevel(self.root)
+        dialog.bind('<Escape>', lambda e: dialog.destroy())
         dialog.title("히스토리")
         dialog.geometry("800x600")
         dialog.configure(bg=COLOR_SURFACE)
