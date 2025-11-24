@@ -11,6 +11,9 @@ import hashlib
 import platform
 import re
 import colorsys
+import holidays
+# [FIX] PyInstaller가 동적 임포트를 감지하지 못하는 문제를 해결하기 위해 명시적 임포트 추가
+import holidays.countries.south_korea
 
 # ---------------------------------------------------------
 # Configuration & Constants
@@ -157,67 +160,71 @@ class HistoryManager:
 
 class HolidayManager:
     def __init__(self):
-        self.fixed_holidays = {
-            (1, 1): "신정", (3, 1): "삼일절", (5, 5): "어린이날",
-            (6, 6): "현충일", (8, 15): "광복절", (10, 3): "개천절",
-            (10, 9): "한글날", (12, 25): "성탄절"
-        }
-        self.lunar_seeds = {
-            2025: {"Seollal": "2025-01-29", "Buddha": "2025-05-05", "Chuseok": "2025-10-06"},
-            2026: {"Seollal": "2026-02-17", "Buddha": "2026-05-24", "Chuseok": "2026-09-25"},
-            2027: {"Seollal": "2027-02-07", "Buddha": "2027-05-13", "Chuseok": "2027-09-15"},
-            2028: {"Seollal": "2028-01-27", "Buddha": "2028-05-02", "Chuseok": "2028-10-03"},
-            2029: {"Seollal": "2029-02-13", "Buddha": "2029-05-20", "Chuseok": "2029-09-22"},
-            2030: {"Seollal": "2030-02-03", "Buddha": "2030-05-09", "Chuseok": "2030-09-12"},
-        }
+        # 대한민국 공휴일 (대체공휴일 포함), 한국어 설정
+        self.kr_holidays = holidays.KR(language="ko")
 
     def get_holidays(self, year):
-        holidays = {}
-        for (month, day), name in self.fixed_holidays.items():
-            try: holidays[datetime.date(year, month, day)] = name
-            except ValueError: continue
-
-        if year in self.lunar_seeds:
-            seeds = self.lunar_seeds[year]
-            s_date = datetime.datetime.strptime(seeds["Seollal"], "%Y-%m-%d").date()
-            holidays[s_date - datetime.timedelta(days=1)] = "설날 연휴"
-            holidays[s_date] = "설날"
-            holidays[s_date + datetime.timedelta(days=1)] = "설날 연휴"
+        # holidays 라이브러리는 year를 키로 접근하면 해당 연도 공휴일을 계산해줍니다.
+        hols = holidays.KR(years=year, language="ko")
+        result = {}
+        for date_obj, name in hols.items():
+            date_str = date_obj.strftime("%Y-%m-%d")
             
-            c_date = datetime.datetime.strptime(seeds["Chuseok"], "%Y-%m-%d").date()
-            holidays[c_date - datetime.timedelta(days=1)] = "추석 연휴"
-            holidays[c_date] = "추석"
-            holidays[c_date + datetime.timedelta(days=1)] = "추석 연휴"
+            # 이름 커스터마이징
+            if "기독탄신일" in name:
+                name = name.replace("기독탄신일", "성탄절")
             
-            b_date = datetime.datetime.strptime(seeds["Buddha"], "%Y-%m-%d").date()
-            holidays[b_date] = "부처님오신날"
+            if "설날 전날" in name or "설날 다음날" in name:
+                name = "설날 연휴"
+            elif "추석 전날" in name or "추석 다음날" in name:
 
-        sorted_dates = sorted(holidays.keys())
-        new_subs = {}
-        for date in sorted_dates:
-            name = holidays[date]
-            is_substitutable = False
-            if "설날" in name or "추석" in name:
-                if date.weekday() == 6: is_substitutable = True
-            elif name == "어린이날":
-                if date.weekday() >= 5: is_substitutable = True
-            elif name in ["삼일절", "광복절", "개천절", "한글날", "성탄절", "부처님오신날"]:
-                if date.weekday() >= 5: is_substitutable = True
+                name = "추석 연휴"
+                
+            result[date_str] = name
             
-            if is_substitutable:
-                next_day = date + datetime.timedelta(days=1)
-                while next_day.weekday() == 6 or next_day in holidays or next_day in new_subs:
-                    next_day += datetime.timedelta(days=1)
-                new_subs[next_day] = "대체공휴일"
-
-        for d, n in new_subs.items(): holidays[d] = n
-        return {k.strftime("%Y-%m-%d"): v for k, v in holidays.items()}
+        return result
 
 class DataManager:
     def __init__(self, filepath, history_manager):
         self.filepath = filepath
         self.history = history_manager
         self.lock = threading.Lock()
+        self.perform_backup()
+
+    def perform_backup(self):
+        """백업 수행 및 30일 지난 백업 삭제"""
+        if not os.path.exists(self.filepath): return
+
+        backup_dir = os.path.join(os.path.dirname(self.filepath), "backups")
+        if not os.path.exists(backup_dir):
+            os.makedirs(backup_dir)
+
+        today_str = datetime.date.today().strftime("%Y%m%d")
+        backup_filename = f"db_backup_{today_str}.json"
+        backup_path = os.path.join(backup_dir, backup_filename)
+
+        # 오늘자 백업이 없으면 생성
+        if not os.path.exists(backup_path):
+            try:
+                import shutil
+                shutil.copy2(self.filepath, backup_path)
+            except Exception as e:
+                print(f"Backup failed: {e}")
+
+        # 30일 지난 백업 삭제
+        cutoff_date = datetime.date.today() - datetime.timedelta(days=30)
+        for filename in os.listdir(backup_dir):
+            if filename.startswith("db_backup_") and filename.endswith(".json"):
+                try:
+                    # 파일명에서 날짜 추출 (db_backup_20251124.json)
+                    date_part = filename.replace("db_backup_", "").replace(".json", "")
+                    file_date = datetime.datetime.strptime(date_part, "%Y%m%d").date()
+                    
+                    if file_date < cutoff_date:
+                        os.remove(os.path.join(backup_dir, filename))
+                        print(f"Deleted old backup: {filename}")
+                except Exception:
+                    pass # 날짜 파싱 실패 등은 무시
 
     def load_data(self):
         with self.lock:
@@ -264,9 +271,6 @@ class DataManager:
                     return True
             return False
 
-# ---------------------------------------------------------
-# UI - Main Application
-# ---------------------------------------------------------
 class VacationApp:
     def apply_icon(self, window):
         icon_path = resource_path("calendar.ico")
@@ -280,17 +284,25 @@ class VacationApp:
         self.root = root
         self.root.title("휴가관리")
         
-        # [수정됨] Center the window Visually
-        # 작업표시줄 등을 고려하여 수학적 중앙보다 약간 위로 배치
-        w, h = 1280, 960
+        # [수정됨] Responsive Window Size
         ws = self.root.winfo_screenwidth()
         hs = self.root.winfo_screenheight()
         
-        x = int((ws - w) / 2)
-        # 높이는 정중앙에서 50픽셀 정도 위로 올려야 시각적으로 안정적임
-        y = int((hs - h) / 2) - 50 
+        # 화면의 85% 크기로 설정
+        w = int(ws * 0.85)
+        h = int(hs * 0.85)
         
-        if y < 0: y = 0 # 화면 위로 넘어가지 않도록 보정
+        # 최대 크기 제한 (너무 커지지 않도록)
+        if w > 1600: w = 1600
+        if h > 1200: h = 1200
+        
+        # 최소 크기 설정 (UI 깨짐 방지)
+        self.root.minsize(1024, 768)
+        
+        x = int((ws - w) / 2)
+        y = int((hs - h) / 2) - 30 # 약간 위로
+        
+        if y < 0: y = 0
         
         self.root.geometry(f'{w}x{h}+{x}+{y}')
         
@@ -434,6 +446,16 @@ class VacationApp:
             for c, day in enumerate(week):
                 # 프레임 생성 (row는 헤더가 0이므로 r+1)
                 container = tk.Frame(self.calendar_frame, bg=COLOR_SURFACE, bd=0)
+                
+                # [NEW] 오늘 날짜 강조
+                is_today = False
+                if day != 0:
+                    current_date_obj = datetime.date(year, month, day)
+                    if current_date_obj == datetime.date.today():
+                        is_today = True
+                        # 배경색 변경 없이 테두리만 강조 (두께 2)
+                        container.configure(highlightbackground=COLOR_TODAY_TEXT, highlightthickness=2)
+                
                 container.grid(row=r+1, column=c, sticky="nsew", padx=1, pady=1)
                 
                 # 배경 클릭 이벤트 (lambda에서 변수 캡처 주의)
@@ -607,11 +629,22 @@ class VacationApp:
         dialog.bind('<Escape>', lambda e: dialog.destroy())
         dialog.title("일정 등록")
         
-        # [유지] 마우스 커서 위치에 팝업 생성
+        # [수정] 마우스 커서 위치에 팝업 생성 (화면 아래쪽 잘림 방지)
         w, h = 380, 300
         mouse_x = self.root.winfo_pointerx()
         mouse_y = self.root.winfo_pointery()
-        dialog.geometry(f"{w}x{h}+{mouse_x}+{mouse_y}")
+        
+        screen_h = self.root.winfo_screenheight()
+        
+        # 팝업이 화면 아래를 벗어나는지 확인 (작업표시줄 고려하여 여유 50px)
+        if mouse_y + h + 50 > screen_h:
+            # 화면 위로 올림
+            pos_y = mouse_y - h
+            if pos_y < 0: pos_y = 0
+        else:
+            pos_y = mouse_y
+            
+        dialog.geometry(f"{w}x{h}+{mouse_x}+{pos_y}")
         
         dialog.configure(bg=COLOR_SURFACE)
         
@@ -667,17 +700,19 @@ class VacationApp:
             if not name:
                 messagebox.showwarning("경고", "이름을 입력하세요.")
                 return
-            
+                
             success, msg = self.data_manager.save_entry(date_str, name, final_type)
             if success:
                 self.refresh_data()
                 dialog.destroy()
             else:
                 messagebox.showerror("에러", msg)
-
-        btn_save = tk.Button(dialog, text="저장하기", command=on_save, 
-                             font=FONT_BTN, bg=COLOR_PRIMARY, fg="white", relief="flat", padx=30, pady=8, cursor="hand2")
+        
+        btn_save = tk.Button(dialog, text="저장", command=on_save, 
+                             font=FONT_BTN, bg=COLOR_PRIMARY, fg="white", 
+                             relief="flat", padx=20, pady=5, cursor="hand2")
         btn_save.pack(pady=20)
+        
         dialog.bind('<Return>', on_save)
 
     def show_history_popup(self):
