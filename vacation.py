@@ -14,12 +14,14 @@ import colorsys
 import holidays
 # [FIX] PyInstaller가 동적 임포트를 감지하지 못하는 문제를 해결하기 위해 명시적 임포트 추가
 import holidays.countries.south_korea
+import msvcrt # Windows File Locking
 
 # ---------------------------------------------------------
 # Configuration & Constants
 # ---------------------------------------------------------
 DATA_DIR_NAME = "삭제금지_data"
 DB_FILENAME = "db.json"
+LOCK_FILENAME = "db.lock" # Lock file for multi-user safety
 HISTORY_FILENAME = "history.json"
 
 # Modern Color Palette (Tailwind-inspired)
@@ -105,6 +107,9 @@ def get_data_dir():
 def get_db_path():
     return os.path.join(get_data_dir(), DB_FILENAME)
 
+def get_lock_path():
+    return os.path.join(get_data_dir(), LOCK_FILENAME)
+
 def get_history_path():
     return os.path.join(get_data_dir(), HISTORY_FILENAME)
 
@@ -121,6 +126,34 @@ def get_color_for_name(name):
     hash_obj = hashlib.md5(name.encode('utf-8'))
     hash_int = int(hash_obj.hexdigest()[:8], 16)
     return USER_COLORS[hash_int % len(USER_COLORS)]
+
+# ---------------------------------------------------------
+# File Locking Mechanism
+# ---------------------------------------------------------
+class FileLock:
+    def __init__(self, filename):
+        self.filename = filename
+        self.handle = None
+
+    def __enter__(self):
+        # Open lock file in append mode (creates if not exists)
+        self.handle = open(self.filename, 'a')
+        try:
+            # Lock the first byte. Wait up to 10 seconds (default for LK_LOCK)
+            self.handle.seek(0)
+            msvcrt.locking(self.handle.fileno(), msvcrt.LK_LOCK, 1)
+        except IOError:
+            self.handle.close()
+            raise Exception("다른 사용자가 데이터를 사용 중입니다. 잠시 후 다시 시도해주세요.")
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.handle:
+            try:
+                self.handle.seek(0)
+                msvcrt.locking(self.handle.fileno(), msvcrt.LK_UNLCK, 1)
+            finally:
+                self.handle.close()
 
 # ---------------------------------------------------------
 # Managers (History, Holiday, Data)
@@ -187,8 +220,8 @@ class HolidayManager:
 class DataManager:
     def __init__(self, filepath, history_manager):
         self.filepath = filepath
+        self.lock_path = get_lock_path()
         self.history = history_manager
-        self.lock = threading.Lock()
         self.perform_backup()
 
     def perform_backup(self):
@@ -227,48 +260,71 @@ class DataManager:
                     pass # 날짜 파싱 실패 등은 무시
 
     def load_data(self):
-        with self.lock:
-            if not os.path.exists(self.filepath): return {}
-            try:
-                with open(self.filepath, 'r', encoding='utf-8') as f: return json.load(f)
-            except: return {}
+        # 읽기 작업도 Lock을 걸어 쓰기 작업 중인 데이터를 읽지 않도록 함
+        try:
+            with FileLock(self.lock_path):
+                if not os.path.exists(self.filepath): return {}
+                try:
+                    with open(self.filepath, 'r', encoding='utf-8') as f: return json.load(f)
+                except: return {}
+        except Exception as e:
+            print(f"Load Error: {e}")
+            return {}
 
     def save_entry(self, date_str, name, type_):
-        with self.lock:
-            data = {}
-            if os.path.exists(self.filepath):
-                try:
-                    with open(self.filepath, 'r', encoding='utf-8') as f: data = json.load(f)
-                except: data = {}
-            if date_str not in data: data[date_str] = []
-            
-            # Check if user already has ANY entry for this date
-            for entry in data[date_str]:
-                if entry['name'] == name: 
-                    return False, "이미 등록된 휴가가 있습니다"
-            
-            data[date_str].append({"name": name, "type": type_})
-            with open(self.filepath, 'w', encoding='utf-8') as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
+        try:
+            with FileLock(self.lock_path):
+                data = {}
+                if os.path.exists(self.filepath):
+                    try:
+                        with open(self.filepath, 'r', encoding='utf-8') as f: data = json.load(f)
+                    except: data = {}
+                
+                if date_str not in data: data[date_str] = []
+                
+                # Check if user already has ANY entry for this date
+                for entry in data[date_str]:
+                    if entry['name'] == name: 
+                        return False, "이미 등록된 휴가가 있습니다"
+                
+                data[date_str].append({"name": name, "type": type_})
+                with open(self.filepath, 'w', encoding='utf-8') as f:
+                    json.dump(data, f, ensure_ascii=False, indent=2)
+                
+            # History log is outside the DB lock to reduce lock time
             self.history.log("등록", date_str, name, type_)
             return True, "성공"
+            
+        except Exception as e:
+            return False, str(e)
 
     def delete_entry(self, date_str, name, type_):
-        with self.lock:
-            data = {}
-            if os.path.exists(self.filepath):
-                try:
-                    with open(self.filepath, 'r', encoding='utf-8') as f: data = json.load(f)
-                except: return False
-            if date_str in data:
-                original_len = len(data[date_str])
-                data[date_str] = [e for e in data[date_str] if not (e['name'] == name and e['type'] == type_)]
-                if len(data[date_str]) == 0: del data[date_str]
-                if len(data.get(date_str, [])) < original_len:
-                    with open(self.filepath, 'w', encoding='utf-8') as f:
-                        json.dump(data, f, ensure_ascii=False, indent=2)
-                    self.history.log("삭제", date_str, name, type_)
-                    return True
+        try:
+            with FileLock(self.lock_path):
+                data = {}
+                if os.path.exists(self.filepath):
+                    try:
+                        with open(self.filepath, 'r', encoding='utf-8') as f: data = json.load(f)
+                    except: return False
+                
+                if date_str in data:
+                    original_len = len(data[date_str])
+                    data[date_str] = [e for e in data[date_str] if not (e['name'] == name and e['type'] == type_)]
+                    if len(data[date_str]) == 0: del data[date_str]
+                    
+                    if len(data.get(date_str, [])) < original_len:
+                        with open(self.filepath, 'w', encoding='utf-8') as f:
+                            json.dump(data, f, ensure_ascii=False, indent=2)
+                        # Success
+                    else:
+                        return False # No change
+                else:
+                    return False
+            
+            self.history.log("삭제", date_str, name, type_)
+            return True
+            
+        except Exception:
             return False
 
 class VacationApp:
